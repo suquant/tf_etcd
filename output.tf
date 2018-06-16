@@ -23,9 +23,13 @@ output "etcd_version" {
 }
 
 output "client_endpoints" {
-  value = "${data.null_data_source.endpoints.outputs["client"]}"
+  value = "${join(",", formatlist("http://%s:%s", var.private_ips, var.client_port))}"
+
+  depends_on = ["null_resource.etcd"]
 }
 
 output "peer_endpoints" {
-  value = "${data.null_data_source.endpoints.outputs["peer"]}"
+  value = "${join(",", formatlist("%s=http://%s:%s", var.hostnames, var.private_ips, var.peer_port))}"
+
+  depends_on = ["null_resource.etcd"]
 }

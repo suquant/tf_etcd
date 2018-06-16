@@ -16,8 +16,6 @@
 * etcd_version - etcd version (default: v3.2.20)
 * client_port - client port (default: 2379)
 * peer_port - peer port (default: 2380)
-* join_clients - join to existing cluster, client urls (default: "")
-* join_peers - join to existing cluster, peer urls (default: "")
 
 ### Output variables
 
@@ -37,10 +35,7 @@
 ```
 variable "token" {}
 variable "hosts" {
-  default = 2
-}
-variable "extra_hosts" {
-  default = 1
+  default = 3
 }
 
 provider "hcloud" {
@@ -55,7 +50,7 @@ module "provider" {
 }
 
 module "etcd" {
-  source = "git::https://github.com/suquant/tf_etcd.git?ref=v1.0.0"
+  source = "git::https://github.com/suquant/tf_etcd.git"
 
   count       = "${var.hosts}"
   connections = "${module.provider.public_ips}"
@@ -64,28 +59,4 @@ module "etcd" {
   private_ips = "${module.provider.private_ips}"
 }
 
-module "provider_extra" {
-  source = "git::https://github.com/suquant/tf_hcloud.git?ref=v1.0.0"
-
-  count = "${var.extra_hosts}"
-  token = "${var.token}"
-  name  = "extra"
-
-  # Reuse ssh keys
-  ssh_keys  = []
-  ssh_names = ["${module.provider.ssh_names}"]
-}
-
-module "etcd_extra" {
-  source = "git::https://github.com/suquant/tf_etcd.git?ref=v1.0.0"
-
-  count         = "${var.extra_hosts}"
-  connections   = "${module.provider_extra.public_ips}"
-
-  hostnames     = "${module.provider_extra.hostnames}"
-  private_ips   = "${module.provider_extra.private_ips}"
-
-  join_clients  = "${module.etcd.client_endpoints}"
-  join_peers    = "${module.etcd.peer_endpoints}"
-}
 ```

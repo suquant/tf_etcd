@@ -1,9 +1,9 @@
 resource "null_resource" "etcd" {
-  count = "${var.count}"
-  depends_on = ["null_resource.install"]
+  count = "${var.count - 1}"
+  depends_on = ["null_resource.install", "null_resource.primary"]
 
   connection {
-    host  = "${element(var.connections, count.index)}"
+    host  = "${element(var.connections, count.index + 1)}"
     user  = "root"
     agent = true
   }
@@ -12,21 +12,22 @@ resource "null_resource" "etcd" {
   provisioner "remote-exec" {
     when    = "destroy"
     inline  = [
-      "etcdctl member remove `etcdctl member list | grep \"$(hostname -s)\" | cut -f1 -d':'` || true",
-      "systemctl stop etcd.service || true",
+      "etcdctl member remove `etcdctl member list | grep \"$(hostname -s)\" | cut -f1 -d':'`",
+      "systemctl stop etcd.service",
       "mv /var/lib/etcd /var/lib/etcd.`date '+%Y%m%d%H%M%S'`"
     ]
+    on_failure = "continue"
   }
 
   # Join
   provisioner "remote-exec" {
-    inline = <<EOF
-${element(data.template_file.join.*.rendered, count.index)}
-EOF
+    inline = [
+      "etcdctl -C \"${format("http://%s:%s", var.private_ips[0], var.client_port)}\" member add \"${element(var.hostnames, count.index + 1)}\" \"${format("http://%s:%s", element(var.private_ips, count.index + 1), var.peer_port)}\""
+    ]
   }
 
   provisioner "file" {
-    content     = "${element(data.template_file.etcd_service.*.rendered, count.index)}"
+    content     = "${element(data.template_file.etcd_service.*.rendered, count.index + 1)}"
     destination = "/etc/systemd/system/etcd.service"
   }
 
@@ -34,8 +35,9 @@ EOF
     inline = [
       "systemctl is-enabled etcd.service || systemctl enable etcd.service",
       "systemctl daemon-reload",
-      "systemctl restart etcd.service"
+      "systemctl start etcd.service"
     ]
+    on_failure = "continue"
   }
 }
 
@@ -45,31 +47,11 @@ data "template_file" "etcd_service" {
 
   vars {
     hostname              = "${element(var.hostnames, count.index)}"
-    intial_cluster        = "${join(",", concat(split(",", var.join_peers), formatlist("%s=http://%s:%s", var.hostnames, var.private_ips, var.peer_port)))}"
+    intial_cluster        = "${join(",", formatlist("%s=http://%s:%s", slice(var.hostnames, 0, count.index + 1), slice(var.private_ips, 0, count.index + 1), var.peer_port))}"
     listen_client_urls    = "http://${element(var.private_ips, count.index)}:${var.client_port}"
     advertise_client_urls = "http://${element(var.private_ips, count.index)}:${var.client_port}"
     listen_peer_urls      = "http://${element(var.private_ips, count.index)}:${var.peer_port}"
     after                 = "${join(" ", var.systemd_after)}"
-    initial_cluster_state = "${var.join_peers == "" ? "new" : "existing"}"
-  }
-}
-
-data "template_file" "join" {
-  count    = "${var.count}"
-  template = "${file("${path.module}/templates/join.sh")}"
-
-  vars {
-    join_clients  = "${var.join_clients}"
-    hostname      = "${element(var.hostnames, count.index)}"
-    urls          = "http://${element(var.private_ips, count.index)}:${var.peer_port}"
-  }
-}
-
-data "null_data_source" "endpoints" {
-  depends_on = ["null_resource.etcd"]
-
-  inputs = {
-    client = "${join(",", formatlist("http://%s:%s", var.private_ips, var.client_port))}"
-    peer   = "${join(",", formatlist("%s=http://%s:%s", var.hostnames, var.private_ips, var.peer_port))}"
+    initial_cluster_state = "existing"
   }
 }

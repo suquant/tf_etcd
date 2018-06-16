@@ -28,11 +28,3 @@ variable "client_port" {
 variable "peer_port" {
   default = "2380"
 }
-
-variable "join_clients" {
-  default = ""
-}
-
-variable "join_peers" {
-  default = ""
-}
