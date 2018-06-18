@@ -1,6 +1,9 @@
 variable "token" {}
 variable "hosts" {
-  default = 2
+  default = 4
+}
+variable "etcds" {
+  default = 4
 }
 
 provider "hcloud" {
@@ -12,12 +15,14 @@ module "provider" {
 
   count = "${var.hosts}"
   token = "${var.token}"
+
+  server_type = "cx21"
 }
 
 module "etcd" {
   source = ".."
 
-  count       = "${var.hosts}"
+  count       = "${var.etcds}"
   connections = "${module.provider.public_ips}"
 
   hostnames   = "${module.provider.hostnames}"
