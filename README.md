@@ -45,7 +45,7 @@ module "provider" {
 }
 
 module "etcd" {
-  source = "git::https://github.com/suquant/tf_etcd.git?ref=v1.1.0"
+  source = "git::https://github.com/suquant/tf_etcd.git?ref=v1.2.0"
 
   count       = "${var.hosts}"
   connections = "${module.provider.public_ips}"
