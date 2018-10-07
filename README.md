@@ -1,9 +1,5 @@
 # Etcd service module for terraform
 
-## Key features
-
-* Add/remove extra nodes without restart whole cluster
-
 ## Interfaces
 
 ### Input variables
