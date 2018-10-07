@@ -1,9 +1,6 @@
 variable "token" {}
 variable "hosts" {
-  default = 4
-}
-variable "etcds" {
-  default = 4
+  default = 3
 }
 
 provider "hcloud" {
@@ -11,18 +8,15 @@ provider "hcloud" {
 }
 
 module "provider" {
-  source = "git::https://github.com/suquant/tf_hcloud.git?ref=v1.0.0"
+  source = "git::https://github.com/suquant/tf_hcloud.git?ref=v1.1.0"
 
   count = "${var.hosts}"
-  token = "${var.token}"
-
-  server_type = "cx21"
 }
 
 module "etcd" {
   source = ".."
 
-  count       = "${var.etcds}"
+  count       = "${var.hosts}"
   connections = "${module.provider.public_ips}"
 
   hostnames   = "${module.provider.hostnames}"

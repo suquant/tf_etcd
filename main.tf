@@ -1,60 +1,124 @@
+variable "count" {}
+
+variable "connections" {
+  type = "list"
+}
+
+variable "private_ips" {
+  type = "list"
+}
+
+variable "hostnames" {
+  type = "list"
+}
+
+variable "after_unit" {
+  type = "list"
+  default = []
+}
+
+variable "etcd_version" {
+  default = "v3.2.24"
+}
+
+variable "client_port" {
+  default = "2379"
+}
+
+variable "peer_port" {
+  default = "2380"
+}
+
+
 resource "null_resource" "etcd" {
-  count = "${var.count - 1}"
-  depends_on = ["null_resource.install", "null_resource.primary"]
+  count = "${var.count}"
+
+  triggers {
+    count = "${var.count}"
+  }
 
   connection {
-    host  = "${element(var.connections, count.index + 1)}"
+    host  = "${element(var.connections, count.index)}"
     user  = "root"
     agent = true
   }
 
-  provisioner "file" {
-    content     = "${element(data.template_file.etcd_service.*.rendered, count.index + 1)}"
-    destination = "/etc/systemd/system/etcd.service"
-  }
-
   provisioner "remote-exec" {
-    inline = <<EOF
-${element(data.template_file.join.*.rendered, count.index + 1)}
-EOF
-  }
-
-  # Unjoin
-  provisioner "remote-exec" {
-    when    = "destroy"
-    inline  = [
-      "attemps=10",
-      "echo \"try to remove member \\\"$(hostname -s)\\\" from cluster, index=${count.index + 1} host=${element(var.connections, count.index + 1)}...\"",
-      "until [ $attemps -le 0 ] || etcdctl --endpoints \"${format("http://%s:%s", var.private_ips[0], var.client_port)}\" member list | grep \"$(hostname -s)\" | cut -f1 -d':' | xargs -n1 etcdctl --endpoints \"${format("http://%s:%s", var.private_ips[0], var.client_port)}\" member remove; do echo \"waiting till etcd member \\\"$(hostname -s)\\\" will be removed...\"; sleep 5; attemps=$((attemps-1)); done",
-      "mv /var/lib/etcd /var/lib/etcd.$(date '+%Y%m%d%H%M%S')",
-      "systemctl stop etcd.service"
+    inline = [
+      "curl -L https://storage.googleapis.com/etcd/${var.etcd_version}/etcd-${var.etcd_version}-linux-amd64.tar.gz -o /tmp/etcd-${var.etcd_version}-linux-amd64.tar.gz",
+      "tar xzvf /tmp/etcd-${var.etcd_version}-linux-amd64.tar.gz -C /usr/bin --strip-components=1 etcd-${var.etcd_version}-linux-amd64/etcd etcd-${var.etcd_version}-linux-amd64/etcdctl",
+      "rm /tmp/etcd-${var.etcd_version}-linux-amd64.tar.gz"
     ]
-    on_failure = "continue"
+  }
+
+  provisioner "file" {
+    content     = "${element(data.template_file.etcd_service.*.rendered, count.index)}"
+    destination = "/etc/systemd/system/etcd3.service"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "systemctl is-enabled etcd3.service || systemctl enable etcd3.service",
+      "systemctl daemon-reload",
+      "systemctl restart etcd3.service"
+    ]
   }
 
 }
 
 data "template_file" "etcd_service" {
   count    = "${var.count}"
-  template = "${file("${path.module}/templates/etcd.service")}"
+  template = "${file("${path.module}/templates/etcd3.service")}"
 
   vars {
-    hostname              = "${element(var.hostnames, count.index)}"
-    listen_client_urls    = "http://${element(var.private_ips, count.index)}:${var.client_port}"
-    advertise_client_urls = "http://${element(var.private_ips, count.index)}:${var.client_port}"
-    listen_peer_urls      = "http://${element(var.private_ips, count.index)}:${var.peer_port}"
-    after                 = "${join(" ", var.systemd_after)}"
+    hostname      = "${element(var.hostnames, count.index)}"
+    listen_ip     = "${element(var.private_ips, count.index)}"
+    client_port   = "${var.client_port}"
+    peer_port     = "${var.peer_port}"
+    peer_members  = "${join(",", formatlist("%s=http://%s:%s", var.hostnames, var.private_ips, var.peer_port))}"
+    after_unit    = "${join(" ", var.after_unit)}"
   }
 }
 
-data "template_file" "join" {
-  count    = "${var.count}"
-  template = "${file("${path.module}/templates/join.sh")}"
 
-  vars {
-    primary_client_url  = "${format("http://%s:%s", var.private_ips[0], var.client_port)}"
-    sequence_number     = "${count.index}"
-    hostname            = "${element(var.hostnames, count.index)}"
-    peer_url            = "${format("http://%s:%s", element(var.private_ips, count.index), var.peer_port)}"
-  }
+output "public_ips" {
+  value = ["${var.connections}"]
+
+  depends_on = ["null_resource.etcd"]
+}
+
+output "private_ips" {
+  value = ["${var.private_ips}"]
+
+  depends_on = ["null_resource.etcd"]
+}
+
+output "hostnames" {
+  value = ["${var.hostnames}"]
+
+  depends_on = ["null_resource.etcd"]
+}
+
+output "after_unit" {
+  value = ["${var.after_unit}"]
+
+  depends_on = ["null_resource.etcd"]
+}
+
+output "etcd_version" {
+  value = "${var.etcd_version}"
+
+  depends_on = ["null_resource.etcd"]
+}
+
+output "client_endpoints" {
+  value = "${join(",", formatlist("http://%s:%s", var.private_ips, var.client_port))}"
+
+  depends_on = ["null_resource.etcd"]
+}
+
+output "peer_endpoints" {
+  value = "${join(",", formatlist("%s=http://%s:%s", var.hostnames, var.private_ips, var.peer_port))}"
+
+  depends_on = ["null_resource.etcd"]
 }

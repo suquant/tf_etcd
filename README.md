@@ -12,7 +12,7 @@
 * connections - public ips where applied
 * private_ips - private ips
 * hostnames - hostnames
-* systemd_after - service file injection "After" (default: [])
+* after_unit - service file injection "After" (default: [])
 * etcd_version - etcd version (default: v3.2.20)
 * client_port - client port (default: 2379)
 * peer_port - peer port (default: 2380)
@@ -43,14 +43,13 @@ provider "hcloud" {
 }
 
 module "provider" {
-  source = "git::https://github.com/suquant/tf_hcloud.git?ref=v1.0.0"
+  source = "git::https://github.com/suquant/tf_hcloud.git?ref=v1.1.0"
 
   count = "${var.hosts}"
-  token = "${var.token}"
 }
 
 module "etcd" {
-  source = "git::https://github.com/suquant/tf_etcd.git"
+  source = "git::https://github.com/suquant/tf_etcd.git?ref=v1.1.0"
 
   count       = "${var.hosts}"
   connections = "${module.provider.public_ips}"

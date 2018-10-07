@@ -1,0 +1,32 @@
+[Unit]
+Description=etcd3
+Wants=network-online.target network.target
+After=network-online.target ${after_unit}
+Conflicts=etcd.service
+Conflicts=etcd2.service
+
+[Service]
+Type=notify
+Restart=always
+RestartSec=10s
+TimeoutStartSec=0
+LimitNOFILE=40000
+
+Environment="ETCD_NAME=${hostname}"
+Environment="ETCD_DATA_DIR=/var/lib/etcd3"
+
+Environment="ETCD_LISTEN_CLIENT_URLS=http://${listen_ip}:${client_port},http://127.0.0.1:2379"
+Environment="ETCD_ADVERTISE_CLIENT_URLS=http://${listen_ip}:${client_port}"
+Environment="ETCD_INITIAL_ADVERTISE_PEER_URLS=http://${listen_ip}:${peer_port}"
+Environment="ETCD_LISTEN_PEER_URLS=http://${listen_ip}:${peer_port}"
+Environment="ETCD_INITIAL_CLUSTER=${peer_members}"
+
+Environment="ETCD_HEARTBEAT_INTERVAL=200"
+Environment="ETCD_ELECTION_TIMEOUT=5000"
+Environment="ETCD_STRICT_RECONFIG_CHECK=true"
+
+ExecStart=/usr/bin/etcd
+
+
+[Install]
+WantedBy=multi-user.target
